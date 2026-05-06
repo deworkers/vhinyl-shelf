@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - PORT=3001
+      - DISCOGS_TOKEN=${DISCOGS_TOKEN}
+      - DISCOGS_USER_AGENT=${DISCOGS_USER_AGENT:-VinylShelf/1.0 +http://localhost}
+    volumes:
+      - backend-data:/app/data
+      - backend-uploads:/app/uploads
+    expose:
+      - "3001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE=/api
+        - VITE_API_ORIGIN=
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  backend-data:
+  backend-uploads:

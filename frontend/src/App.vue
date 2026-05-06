@@ -1,0 +1,348 @@
+<script setup>
+import { ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
+const route = useRoute();
+const router = useRouter();
+const isSearchOpen = ref(false);
+const quickQuery = ref('');
+
+watch(
+	() => route.query.q,
+	(value) => {
+		quickQuery.value = typeof value === 'string' ? value : '';
+	},
+	{ immediate: true },
+);
+
+function toggleSearch() {
+	isSearchOpen.value = !isSearchOpen.value;
+}
+
+function submitQuickSearch() {
+	const query = quickQuery.value?.trim() || '';
+	if (!query) return;
+	router.push({
+		path: '/search',
+		query: { q: query },
+	});
+}
+</script>
+
+<template>
+	<div class="app-shell">
+		<header class="topbar">
+			<div
+				class="topbar-inner"
+				:class="{ 'search-active': isSearchOpen }">
+				<router-link
+					to="/"
+					class="brand"
+					aria-label="My Vinyl Shelf — на главную">
+					<span
+						class="brand-mark"
+						aria-hidden="true">
+						<span class="brand-mark-disc"></span>
+					</span>
+					<span class="brand-text">
+						<span class="brand-title">Vinyl Shelf</span>
+						<span class="brand-sub">личная коллекция</span>
+					</span>
+				</router-link>
+
+				<div
+					class="search-wrap"
+					:class="{ 'is-open': isSearchOpen }">
+					<Transition name="search-reveal">
+						<form
+							v-if="isSearchOpen"
+							class="quick-search"
+							@submit.prevent="submitQuickSearch">
+							<svg
+								class="quick-search-icon"
+								viewBox="0 0 24 24"
+								aria-hidden="true">
+								<path
+									d="M10.5 3a7.5 7.5 0 015.95 12.07l4.24 4.24-1.42 1.42-4.24-4.24A7.5 7.5 0 1110.5 3zm0 2a5.5 5.5 0 100 11 5.5 5.5 0 000-11z" />
+							</svg>
+							<input
+								v-model.trim="quickQuery"
+								autofocus
+								placeholder="Альбом, исполнитель, лейбл…" />
+						</form>
+					</Transition>
+					<button
+						class="icon-btn"
+						type="button"
+						@click="toggleSearch"
+						:aria-label="
+							isSearchOpen ? 'Закрыть поиск' : 'Открыть поиск'
+						">
+						<svg
+							v-if="!isSearchOpen"
+							viewBox="0 0 24 24"
+							aria-hidden="true">
+							<path
+								d="M10.5 3a7.5 7.5 0 015.95 12.07l4.24 4.24-1.42 1.42-4.24-4.24A7.5 7.5 0 1110.5 3zm0 2a5.5 5.5 0 100 11 5.5 5.5 0 000-11z" />
+						</svg>
+						<svg
+							v-else
+							viewBox="0 0 24 24"
+							aria-hidden="true">
+							<path
+								d="M6.4 5l12.6 12.6-1.4 1.4L5 6.4 6.4 5zm12.6 1.4L6.4 19 5 17.6 17.6 5 19 6.4z" />
+						</svg>
+					</button>
+				</div>
+			</div>
+		</header>
+		<main class="content">
+			<router-view v-slot="{ Component }">
+				<Transition
+					name="page"
+					mode="out-in">
+					<component :is="Component" />
+				</Transition>
+			</router-view>
+		</main>
+	</div>
+</template>
+
+<style scoped>
+.app-shell {
+	min-height: 100vh;
+}
+
+.topbar {
+	position: sticky;
+	top: 0;
+	z-index: 30;
+	background: color-mix(in srgb, var(--bg) 78%, transparent);
+	backdrop-filter: saturate(160%) blur(14px);
+	-webkit-backdrop-filter: saturate(160%) blur(14px);
+	border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.topbar-inner {
+	max-width: var(--container);
+	margin: 0 auto;
+	padding: 0.7rem 1.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+/* Бренд */
+.brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.65rem;
+	min-width: 0;
+	flex: 0 1 auto;
+}
+.brand-mark {
+	flex-shrink: 0;
+}
+.brand-mark {
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	background:
+		radial-gradient(circle at 50% 50%, #fff 0 6px, transparent 7px),
+		conic-gradient(
+			from 0deg,
+			#1f1a16 0 25%,
+			#2a221b 25% 50%,
+			#1f1a16 50% 75%,
+			#2a221b 75%
+		);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		var(--shadow-sm);
+	position: relative;
+	overflow: hidden;
+}
+.brand-mark::after {
+	content: '';
+	position: absolute;
+	inset: 7px;
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+.brand-mark-disc {
+	position: absolute;
+	inset: 14px;
+	border-radius: 50%;
+	background: #fff;
+	z-index: 2;
+}
+.brand-text {
+	display: grid;
+	line-height: 1.05;
+	min-width: 0;
+}
+.brand-title {
+	font-family: var(--font-display);
+	font-weight: 700;
+	font-size: 1.15rem;
+	color: var(--text);
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+}
+.brand-sub {
+	font-size: 0.72rem;
+	color: var(--text-muted);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+/* Поиск в топбаре */
+.search-wrap {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex: 0 0 auto;
+	min-width: 0;
+}
+.topbar-inner.search-active .search-wrap {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.icon-btn {
+	flex: 0 0 auto;
+	border: 1px solid var(--border);
+	width: 42px;
+	height: 42px;
+	border-radius: var(--radius-pill);
+	background: var(--bg-elevated);
+	color: var(--text);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition:
+		background var(--transition),
+		color var(--transition),
+		transform var(--transition),
+		border-color var(--transition);
+	box-shadow: var(--shadow-xs);
+}
+.icon-btn:hover {
+	background: var(--accent);
+	color: var(--text-on-accent);
+	border-color: var(--accent);
+	transform: translateY(-1px);
+}
+.icon-btn:active {
+	transform: translateY(0);
+}
+.icon-btn svg {
+	width: 18px;
+	height: 18px;
+	fill: currentColor;
+}
+
+.quick-search {
+	position: relative;
+	display: flex;
+	align-items: center;
+	flex: 1 1 auto;
+	min-width: 0;
+	max-width: 420px;
+}
+.quick-search-icon {
+	position: absolute;
+	left: 14px;
+	width: 16px;
+	height: 16px;
+	fill: var(--text-muted);
+	pointer-events: none;
+}
+.quick-search input {
+	width: 100%;
+	height: 42px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-pill);
+	padding: 0 1rem 0 2.4rem;
+	background: var(--bg-elevated);
+	color: var(--text);
+	box-shadow: var(--shadow-sm);
+	transition:
+		border-color var(--transition),
+		box-shadow var(--transition);
+}
+.quick-search input::placeholder {
+	color: var(--text-subtle);
+}
+.quick-search input:focus {
+	border-color: var(--accent);
+	box-shadow: var(--ring-accent);
+	outline: none;
+}
+
+.search-reveal-enter-active,
+.search-reveal-leave-active {
+	transition:
+		opacity var(--transition),
+		transform var(--transition);
+}
+.search-reveal-enter-from,
+.search-reveal-leave-to {
+	opacity: 0;
+	transform: translateX(8px);
+}
+
+.content {
+	max-width: var(--container);
+	margin: 0 auto;
+	padding: 1.5rem 1.25rem 4rem;
+}
+
+/* Анимация смены страниц */
+.page-enter-active,
+.page-leave-active {
+	transition:
+		opacity 220ms ease,
+		transform 220ms ease;
+}
+.page-enter-from {
+	opacity: 0;
+	transform: translateY(6px);
+}
+.page-leave-to {
+	opacity: 0;
+	transform: translateY(-4px);
+}
+
+@media (max-width: 640px) {
+	.topbar-inner {
+		padding: 0.6rem 0.9rem;
+		gap: 0.5rem;
+	}
+	.brand-sub {
+		display: none;
+	}
+	.brand-title {
+		font-size: 1.05rem;
+	}
+	.icon-btn {
+		width: 40px;
+		height: 40px;
+	}
+	.content {
+		padding: 1rem 0.9rem 3rem;
+	}
+
+	/* При открытом поиске прячем текст бренда — остаётся только знак */
+	.topbar-inner.search-active .brand-text {
+		display: none;
+	}
+}
+</style>
