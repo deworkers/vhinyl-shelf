@@ -6,6 +6,7 @@ import morgan from "morgan";
 import discogsRoutes from "./routes/discogs.js";
 import recordsRoutes from "./routes/records.js";
 import uploadsRoutes from "./routes/uploads.js";
+import previewsRoutes from "./routes/previews.js";
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/discogs", discogsRoutes);
 app.use("/api/records", recordsRoutes);
 app.use("/api/uploads", uploadsRoutes);
+app.use("/api/previews", previewsRoutes);
 
 app.use((err, _req, res, _next) => {
   if (err.status === 429) {

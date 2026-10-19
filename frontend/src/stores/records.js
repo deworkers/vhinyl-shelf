@@ -50,6 +50,12 @@ export const useRecordsStore = defineStore("records", {
       const response = await fetch(`${API_BASE}/discogs/releases/${releaseId}`);
       return parseJson(response);
     },
+    async fetchTrackPreview({ artist, title, album, duration = "", ignoreAlbum = false }, signal) {
+      const params = new URLSearchParams({ artist, title, album, duration, ignore_album: String(ignoreAlbum) });
+      const response = await fetch(`${API_BASE}/previews/search?${params}`, { signal });
+      const data = await parseJson(response);
+      return data.preview;
+    },
     async addDiscogsRelease(payload, status) {
       const response = await fetch(`${API_BASE}/records`, {
         method: "POST",

@@ -1,0 +1,5 @@
+simulation: vinyl-previews
+routing: path
+mocks:
+  - routeKey: itunes
+    path: ../mocks/itunes/default.js

@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRecordsStore } from '../stores/records';
+import ReleaseTracklist from '../components/ReleaseTracklist.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -34,6 +35,9 @@ const displayArtist = computed(
 		releaseData.value?.artists?.map((a) => a.name).join(', '),
 );
 const displayTitle = computed(() => releaseData.value?.title || 'Untitled');
+const ignorePreviewAlbum = computed(() => releaseData.value?.formats?.some((format) =>
+	format.descriptions?.some((description) => ['Compilation', 'Unofficial Release'].includes(description)),
+) || false);
 const displayYear = computed(
 	() =>
 		String(
@@ -156,18 +160,24 @@ async function toggleStatus(targetStatus) {
 	}
 }
 
-onMounted(async () => {
+watch(() => route.params.id, async (_id, _previousId, onCleanup) => {
+	let cancelled = false;
+	onCleanup(() => { cancelled = true; });
 	loading.value = true;
+	error.value = '';
+	releaseData.value = null;
+	currentRecord.value = null;
 	try {
+		let data;
 		if (isDiscogsPreview.value) {
 			const releaseId = String(route.params.id).replace('discogs-', '');
-			releaseData.value = await store.fetchDiscogsRelease(releaseId);
+			data = await store.fetchDiscogsRelease(releaseId);
 		} else {
 			const record = await store.fetchRecordById(route.params.id);
 			const payload = record.payload_json
 				? JSON.parse(record.payload_json)
 				: {};
-			releaseData.value = {
+			data = {
 				...payload,
 				title: record.title,
 				artist: record.artist,
@@ -176,13 +186,17 @@ onMounted(async () => {
 				notes: payload.notes || record.notes || '',
 			};
 		}
-		await refreshCollectionState();
+		const records = await store.fetchAllRecords();
+		if (cancelled) return;
+		releaseData.value = data;
+		allRecords.value = records;
+		currentRecord.value = findCurrentRecord(records);
 	} catch (err) {
-		error.value = err.message;
+		if (!cancelled) error.value = err.message;
 	} finally {
-		loading.value = false;
+		if (!cancelled) loading.value = false;
 	}
-});
+}, { immediate: true });
 </script>
 
 <template>
@@ -323,26 +337,12 @@ onMounted(async () => {
 					</div>
 				</dl>
 
-				<section
+				<ReleaseTracklist
 					v-if="releaseData.tracklist?.length"
-					class="tracklist-section">
-					<h3>Треклист</h3>
-					<ol class="tracklist">
-						<li
-							v-for="(track, index) in releaseData.tracklist"
-							:key="index">
-							<span class="track-pos">
-								{{ track.position || index + 1 }}
-							</span>
-							<span class="track-title">{{ track.title }}</span>
-							<span
-								v-if="track.duration"
-								class="track-dur">
-								{{ track.duration }}
-							</span>
-						</li>
-					</ol>
-				</section>
+					:tracks="releaseData.tracklist"
+					:artist="displayArtist"
+					:album="displayTitle"
+					:ignore-album="ignorePreviewAlbum" />
 			</div>
 		</article>
 	</section>
@@ -592,48 +592,6 @@ onMounted(async () => {
 .meta dd {
 	margin: 0;
 	color: var(--text);
-}
-
-/* Tracklist */
-.tracklist-section h3 {
-	margin: 0 0 0.6rem;
-	font-size: 1.1rem;
-}
-.tracklist {
-	margin: 0;
-	padding: 0;
-	list-style: none;
-	display: grid;
-	gap: 0.15rem;
-}
-.tracklist li {
-	display: grid;
-	grid-template-columns: 36px 1fr auto;
-	gap: 0.6rem;
-	align-items: center;
-	padding: 0.55rem 0.6rem;
-	border-radius: var(--radius-sm);
-	transition: background var(--transition);
-}
-.tracklist li:hover {
-	background: var(--bg-tinted);
-}
-.track-pos {
-	color: var(--text-subtle);
-	font-variant-numeric: tabular-nums;
-	font-size: 0.85rem;
-	font-weight: 600;
-}
-.track-title {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.track-dur {
-	color: var(--text-muted);
-	font-variant-numeric: tabular-nums;
-	font-size: 0.85rem;
 }
 
 .state {
