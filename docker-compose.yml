@@ -22,7 +22,8 @@ services:
         - VITE_API_BASE=/api
         - VITE_API_ORIGIN=
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "8080:80"
     restart: unless-stopped

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001/api";
+const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
 async function parseJson(response) {
   const json = await response.json().catch(() => ({}));
@@ -36,7 +36,7 @@ export const useRecordsStore = defineStore("records", {
       return parseJson(response);
     },
     async searchDiscogs(params) {
-      const url = new URL(`${API_BASE}/discogs/search`);
+      const url = new URL(`${API_BASE}/discogs/search`, window.location.origin);
       Object.entries(params).forEach(([key, value]) => {
         if (value) url.searchParams.set(key, value);
       });

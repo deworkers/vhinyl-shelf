@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRecordsStore } from '../stores/records';
 import AddRecordModal from '../components/AddRecordModal.vue';
+import BarcodeScanner from '../components/BarcodeScanner.vue';
+import { normalizeBarcode } from '../utils/barcode';
 
 const store = useRecordsStore();
 const router = useRouter();
@@ -10,6 +12,7 @@ const route = useRoute();
 const loading = ref(false);
 const error = ref('');
 const showManualModal = ref(false);
+const showScanner = ref(false);
 const addedIds = ref(new Set());
 
 const filters = reactive({
@@ -40,8 +43,9 @@ async function search(page = 1) {
 	error.value = '';
 	try {
 		filters.page = page;
+		const barcode = normalizeBarcode(query);
 		await store.searchDiscogs({
-			q: query,
+			...(barcode ? { barcode } : { q: query }),
 			format: 'Vinyl',
 			page: String(filters.page),
 			per_page: '12',
@@ -52,6 +56,12 @@ async function search(page = 1) {
 	} finally {
 		loading.value = false;
 	}
+}
+
+function onBarcodeDetected(barcode) {
+	showScanner.value = false;
+	filters.q = barcode;
+	search(1);
 }
 
 async function addRelease(result, status) {
@@ -132,7 +142,8 @@ watch(
 				</svg>
 				<input
 					v-model="filters.q"
-					placeholder="Свободный поиск: исполнитель, альбом, трек…" />
+					aria-label="Поиск по альбому, исполнителю, треку или штрихкоду"
+					placeholder="Альбом, исполнитель или штрихкод…" />
 				<button
 					v-if="filters.q"
 					type="button"
@@ -147,6 +158,17 @@ watch(
 							fill="currentColor" />
 					</svg>
 				</button>
+				<button
+					type="button"
+					class="scan-trigger"
+					aria-label="Сканировать штрихкод"
+					title="Сканировать штрихкод"
+					:disabled="loading"
+					@click="showScanner = true">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M3 5h2v14H3V5zm4 0h1v14H7V5zm3 0h3v14h-3V5zm5 0h1v14h-1V5zm3 0h3v14h-3V5z" fill="currentColor" />
+					</svg>
+				</button>
 			</div>
 			<button
 				type="submit"
@@ -157,7 +179,7 @@ watch(
 			<button
 				v-if="hasResults || hasQuery"
 				type="button"
-				class="ghost-btn"
+				class="link-btn reset-btn"
 				@click="resetSearch">
 				Сбросить
 			</button>
@@ -315,6 +337,10 @@ watch(
 			v-if="showManualModal"
 			@close="showManualModal = false"
 			@saved="store.fetchRecords()" />
+		<BarcodeScanner
+			v-if="showScanner"
+			@close="showScanner = false"
+			@detected="onBarcodeDetected" />
 	</section>
 </template>
 
@@ -358,7 +384,7 @@ watch(
 .search-input input {
 	width: 100%;
 	height: 46px;
-	padding: 0 2.6rem 0 2.6rem;
+	padding: 0 5rem 0 2.6rem;
 	border-radius: var(--radius-pill);
 	border: 1px solid var(--border);
 	background: var(--bg-elevated);
@@ -377,7 +403,7 @@ watch(
 }
 .clear-input {
 	position: absolute;
-	right: 8px;
+	right: 46px;
 	width: 30px;
 	height: 30px;
 	border-radius: 50%;
@@ -399,6 +425,33 @@ watch(
 .clear-input svg {
 	width: 12px;
 	height: 12px;
+}
+.scan-trigger {
+	position: absolute;
+	right: 7px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.scan-trigger:hover:not(:disabled) {
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+.scan-trigger:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+.scan-trigger svg {
+	width: 20px;
+	height: 20px;
 }
 
 /* Buttons */
@@ -476,6 +529,12 @@ watch(
 }
 .link-btn:hover {
 	color: var(--accent-hover);
+}
+.reset-btn {
+	align-self: center;
+	padding: 0.55rem 0.5rem;
+	color: var(--text-muted);
+	font-weight: 500;
 }
 
 /* Results grid (vinyl tile style) */
@@ -752,8 +811,10 @@ watch(
 	.search-form {
 		flex-direction: column;
 	}
-	.primary-btn,
-	.search-form .ghost-btn {
+	.search-input {
+		flex-basis: auto;
+	}
+	.primary-btn {
 		width: 100%;
 	}
 	.results {

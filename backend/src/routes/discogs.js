@@ -9,16 +9,31 @@ router.get("/search", async (req, res, next) => {
       q,
       release_title,
       artist,
+      barcode,
       format = "Vinyl",
       page = "1",
       per_page = "12",
       type = "release",
     } = req.query;
 
+    const normalizedBarcode =
+      typeof barcode === "string" ? barcode.replace(/[\s-]/g, "") : barcode;
+    if (
+      barcode !== undefined &&
+      (typeof normalizedBarcode !== "string" ||
+        !/^(?:\d{8}|\d{12,13})$/.test(normalizedBarcode) ||
+        /^0+$/.test(normalizedBarcode))
+    ) {
+      return res.status(400).json({
+        message: "Введите штрихкод EAN/UPC: 8, 12 или 13 цифр.",
+      });
+    }
+
     const { data, rateLimit } = await discogsFetch("/database/search", {
       q,
       release_title,
       artist,
+      barcode: normalizedBarcode,
       format,
       page,
       per_page,

@@ -1,0 +1,157 @@
+name: CI and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  checks:
+    name: Test ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [backend, frontend]
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: ${{ matrix.project }}/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - if: matrix.project == 'backend'
+        run: bash ../deploy/test-deploy.sh
+      - if: matrix.project == 'frontend'
+        run: npm run build
+
+  containers:
+    name: Verify and publish containers
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      COMPOSE_PROJECT_NAME: vinyl-shelf-ci
+    outputs:
+      image_prefix: ${{ steps.images.outputs.prefix }}
+      image_tag: ${{ steps.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Build and start containers
+        run: docker compose up --build --detach --wait --wait-timeout 180
+      - name: Check application and database
+        run: |
+          curl --fail --silent --show-error http://localhost:8080/ --output /dev/null
+          curl --fail --silent --show-error http://localhost:8080/search --output /dev/null
+          curl --fail --silent --show-error http://localhost:8080/api/health |
+            python3 -c 'import json, sys; assert json.load(sys.stdin).get("ok") is True'
+          curl --fail --silent --show-error http://localhost:8080/api/records |
+            python3 -c 'import json, sys; assert isinstance(json.load(sys.stdin), list)'
+      - name: Publish tested images
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        id: images
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: |
+          prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tag="sha-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+          for service in backend frontend; do
+            image_id=$(docker compose images --quiet "$service")
+            docker tag "$image_id" "$prefix-$service:$tag"
+            docker push "$prefix-$service:$tag"
+          done
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=100
+      - name: Stop CI containers
+        if: always()
+        run: docker compose down --volumes
+
+  deploy:
+    name: Deploy production
+    needs: containers
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/vinyl-shelf' }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      IMAGE_PREFIX: ${{ needs.containers.outputs.image_prefix }}
+      IMAGE_TAG: ${{ needs.containers.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Configure SSH
+        run: |
+          : "${DEPLOY_HOST:?Set DEPLOY_HOST secret}"
+          : "${DEPLOY_USER:?Set DEPLOY_USER secret}"
+          : "${DEPLOY_SSH_KEY:?Set DEPLOY_SSH_KEY secret}"
+          : "${DEPLOY_KNOWN_HOSTS:?Set DEPLOY_KNOWN_HOSTS secret}"
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]]
+          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_./-]+$ && "$DEPLOY_PATH" != / ]]
+          install -d -m 700 "$RUNNER_TEMP/deploy-ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy-ssh/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/deploy-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/deploy-ssh/key" "$RUNNER_TEMP/deploy-ssh/known_hosts"
+      - name: Upload release and deploy
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: |
+          ssh_options=(-i "$RUNNER_TEMP/deploy-ssh/key" -p "$DEPLOY_PORT"
+            -o BatchMode=yes -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$RUNNER_TEMP/deploy-ssh/known_hosts"
+            -o ConnectTimeout=15 -o ServerAliveInterval=30)
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          release="$DEPLOY_PATH/releases/$IMAGE_TAG"
+          ssh "${ssh_options[@]}" "$remote" "mkdir -p -- $(printf '%q' "$release")"
+          tar -czf - docker-compose.prod.yml deploy/deploy.sh |
+            ssh "${ssh_options[@]}" "$remote" "tar -xzf - -C $(printf '%q' "$release")"
+          printf '%s\n' "$GHCR_TOKEN" |
+            ssh "${ssh_options[@]}" "$remote" "bash $(printf '%q' "$release/deploy/deploy.sh") $(printf '%q' "$DEPLOY_PATH") $(printf '%q' "$IMAGE_PREFIX") $(printf '%q' "$IMAGE_TAG") $(printf '%q' "$REGISTRY_USER")"
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/deploy-ssh/key" "$RUNNER_TEMP/deploy-ssh/known_hosts"

@@ -387,7 +387,7 @@ onMounted(async () => {
 	background:
 		radial-gradient(
 			circle at 0% 0%,
-			rgba(232, 169, 81, 0.1),
+			rgba(232, 169, 81, 0.05),
 			transparent 50%
 		),
 		var(--bg-elevated);
@@ -498,12 +498,15 @@ onMounted(async () => {
 	color: var(--text-on-accent);
 }
 .action-btn.active {
-	background: var(--danger-soft);
-	color: var(--danger);
-	border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+	background: var(--bg-subtle);
+	color: var(--text-muted);
+	border-color: var(--border);
+	box-shadow: none;
 }
-.action-btn.active.primary {
-	background: var(--danger-soft);
+.action-btn.active:hover:not(:disabled) {
+	background: var(--bg-subtle);
+	color: var(--text);
+	border-color: var(--border-strong);
 }
 .action-btn:disabled {
 	opacity: 0.6;

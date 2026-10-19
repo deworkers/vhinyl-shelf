@@ -1,11 +1,13 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import BarcodeScanner from './components/BarcodeScanner.vue';
 
 const route = useRoute();
 const router = useRouter();
 const isSearchOpen = ref(false);
 const quickQuery = ref('');
+const showScanner = ref(false);
 
 watch(
 	() => route.query.q,
@@ -14,6 +16,10 @@ watch(
 	},
 	{ immediate: true },
 );
+
+watch(() => route.fullPath, () => {
+	showScanner.value = false;
+});
 
 function toggleSearch() {
 	isSearchOpen.value = !isSearchOpen.value;
@@ -27,6 +33,12 @@ function submitQuickSearch() {
 		query: { q: query },
 	});
 }
+
+function onBarcodeDetected(barcode) {
+	showScanner.value = false;
+	quickQuery.value = barcode;
+	submitQuickSearch();
+}
 </script>
 
 <template>
@@ -34,7 +46,9 @@ function submitQuickSearch() {
 		<header class="topbar">
 			<div
 				class="topbar-inner"
-				:class="{ 'search-active': isSearchOpen }">
+				:class="{
+					'search-active': isSearchOpen && route.name !== 'search',
+				}">
 				<router-link
 					to="/"
 					class="brand"
@@ -51,6 +65,7 @@ function submitQuickSearch() {
 				</router-link>
 
 				<div
+					v-if="route.name !== 'search'"
 					class="search-wrap"
 					:class="{ 'is-open': isSearchOpen }">
 					<Transition name="search-reveal">
@@ -68,7 +83,18 @@ function submitQuickSearch() {
 							<input
 								v-model.trim="quickQuery"
 								autofocus
-								placeholder="Альбом, исполнитель, лейбл…" />
+								aria-label="Поиск по альбому, исполнителю или штрихкоду"
+								placeholder="Альбом, исполнитель или штрихкод…" />
+							<button
+								type="button"
+								class="quick-scan"
+								aria-label="Сканировать штрихкод"
+								title="Сканировать штрихкод"
+								@click="showScanner = true">
+								<svg viewBox="0 0 24 24" aria-hidden="true">
+									<path d="M3 5h2v14H3V5zm4 0h1v14H7V5zm3 0h3v14h-3V5zm5 0h1v14h-1V5zm3 0h3v14h-3V5z" fill="currentColor" />
+								</svg>
+							</button>
 						</form>
 					</Transition>
 					<button
@@ -105,6 +131,10 @@ function submitQuickSearch() {
 				</Transition>
 			</router-view>
 		</main>
+		<BarcodeScanner
+			v-if="showScanner"
+			@close="showScanner = false"
+			@detected="onBarcodeDetected" />
 	</div>
 </template>
 
@@ -206,6 +236,7 @@ function submitQuickSearch() {
 	position: relative;
 	display: inline-flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 0.5rem;
 	flex: 0 0 auto;
 	min-width: 0;
@@ -267,10 +298,11 @@ function submitQuickSearch() {
 }
 .quick-search input {
 	width: 100%;
+	min-width: 0;
 	height: 42px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-pill);
-	padding: 0 1rem 0 2.4rem;
+	padding: 0 3rem 0 2.4rem;
 	background: var(--bg-elevated);
 	color: var(--text);
 	box-shadow: var(--shadow-sm);
@@ -285,6 +317,29 @@ function submitQuickSearch() {
 	border-color: var(--accent);
 	box-shadow: var(--ring-accent);
 	outline: none;
+}
+.quick-scan {
+	position: absolute;
+	right: 4px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.quick-scan:hover {
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+.quick-scan svg {
+	width: 20px;
+	height: 20px;
 }
 
 .search-reveal-enter-active,
@@ -334,6 +389,9 @@ function submitQuickSearch() {
 	}
 	.icon-btn {
 		width: 40px;
+		height: 40px;
+	}
+	.quick-search input {
 		height: 40px;
 	}
 	.content {

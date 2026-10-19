@@ -1,0 +1,27 @@
+services:
+  backend:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX is required}-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    environment:
+      PORT: "3001"
+      NODE_ENV: production
+      DISCOGS_TOKEN: ${DISCOGS_TOKEN:?Set DISCOGS_TOKEN in the server .env}
+      DISCOGS_USER_AGENT: ${DISCOGS_USER_AGENT:-VinylShelf/1.0}
+    volumes:
+      - backend-data:/app/data
+      - backend-uploads:/app/uploads
+    expose:
+      - "3001"
+    restart: unless-stopped
+
+  frontend:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX is required}-frontend:${IMAGE_TAG:?IMAGE_TAG is required}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:80"
+    restart: unless-stopped
+
+volumes:
+  backend-data:
+  backend-uploads:

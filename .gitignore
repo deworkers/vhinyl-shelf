@@ -5,6 +5,7 @@ backend/node_modules/
 
 # Env files / secrets
 .env
+.env.*
 *.env
 !.env.example
 backend/.env
@@ -30,6 +31,8 @@ pnpm-debug.log*
 .pi/sessions/
 .pi/npm/
 .pi/git/
+.codebase-index/
+output/
 
 # OS / editor
 .DS_Store
