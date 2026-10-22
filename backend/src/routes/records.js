@@ -1,25 +1,27 @@
 import express from "express";
 import db from "../db/client.js";
 import { resolveCoverUrl } from "../providers/discogsClient.js";
+import { collectionOwner } from "../auth/sessions.js";
+import { deleteUploadFiles } from "../files/cleanup.js";
 
 const router = express.Router();
 
 const listStmt = db.prepare(`
   SELECT * FROM records
-  WHERE (@status IS NULL OR status = @status)
+  WHERE user_id = @user_id AND (@status IS NULL OR status = @status)
   ORDER BY datetime(created_at) DESC
 `);
 const getByIdStmt = db.prepare("SELECT * FROM records WHERE id = ?");
 const getByDiscogsIdStmt = db.prepare(
-  "SELECT * FROM records WHERE discogs_release_id = ?"
+  "SELECT * FROM records WHERE user_id = ? AND discogs_release_id = ?"
 );
 
 const insertStmt = db.prepare(`
   INSERT INTO records (
-    source, discogs_release_id, status, title, artist, year, label, format,
+    user_id, source, discogs_release_id, status, title, artist, year, label, format,
     cover_url, notes, payload_json, spotify_preview_url
   ) VALUES (
-    @source, @discogs_release_id, @status, @title, @artist, @year, @label, @format,
+    @user_id, @source, @discogs_release_id, @status, @title, @artist, @year, @label, @format,
     @cover_url, @notes, @payload_json, @spotify_preview_url
   )
 `);
@@ -58,21 +60,27 @@ function mapDiscogsToRecord(payload, status) {
   };
 }
 
-router.get("/", (req, res) => {
+router.get("/", collectionOwner, (req, res) => {
   const status = req.query.status || null;
-  const rows = listStmt.all({ status });
+  if (status !== null && !["my_collection", "want_to_buy"].includes(status)) {
+    return res.status(400).json({ message: "Invalid status" });
+  }
+  const rows = listStmt.all({ status, user_id: req.ownerId });
   res.json(rows);
 });
 
-router.get("/:id", (req, res) => {
-  const row = getByIdStmt.get(req.params.id);
-  if (!row) {
+router.param("id", (req, res, next, id) => {
+  const row = /^\d+$/.test(id) && getByIdStmt.get(id);
+  if (!row || (req.user.role !== "admin" && row.user_id !== req.user.id)) {
     return res.status(404).json({ message: "Record not found" });
   }
-  return res.json(row);
+  req.record = row;
+  next();
 });
 
-router.post("/", (req, res) => {
+router.get("/:id", (req, res) => res.json(req.record));
+
+router.post("/", collectionOwner, (req, res) => {
   const { source, status, discogsPayload, manual } = req.body;
 
   if (!status || !["my_collection", "want_to_buy"].includes(status)) {
@@ -81,10 +89,10 @@ router.post("/", (req, res) => {
 
   let recordToSave;
   if (source === "discogs") {
-    if (!discogsPayload?.id) {
+    if (!Number.isSafeInteger(discogsPayload?.id) || discogsPayload.id <= 0) {
       return res.status(400).json({ message: "discogsPayload.id is required" });
     }
-    const existing = getByDiscogsIdStmt.get(discogsPayload.id);
+    const existing = getByDiscogsIdStmt.get(req.ownerId, discogsPayload.id);
     if (existing) {
       return res.status(409).json({ message: "Release already added", record: existing });
     }
@@ -116,7 +124,7 @@ router.post("/", (req, res) => {
     return res.status(400).json({ message: "Invalid source. Use discogs or manual" });
   }
 
-  const result = insertStmt.run(recordToSave);
+  const result = insertStmt.run({ ...recordToSave, user_id: req.ownerId });
   const created = getByIdStmt.get(result.lastInsertRowid);
   return res.status(201).json(created);
 });
@@ -139,10 +147,12 @@ router.patch("/:id", (req, res) => {
 });
 
 router.delete("/:id", (req, res) => {
+  const uploads = db.prepare("SELECT file_path FROM uploads WHERE record_id = ?").all(req.params.id);
   const result = deleteStmt.run(req.params.id);
   if (!result.changes) {
     return res.status(404).json({ message: "Record not found" });
   }
+  deleteUploadFiles(uploads);
   return res.status(204).send();
 });
 

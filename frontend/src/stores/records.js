@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { apiFetch as fetch } from "../utils/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
@@ -18,21 +19,25 @@ export const useRecordsStore = defineStore("records", {
     loading: false,
     searchResults: [],
     searchPagination: null,
+    recordsRequest: null,
   }),
   actions: {
-    async fetchRecords() {
+    async fetchRecords(userId = null) {
+      const request = Symbol();
+      this.recordsRequest = request;
       this.loading = true;
       try {
         const response = await fetch(
-          `${API_BASE}/records?status=${encodeURIComponent(this.statusFilter)}`
+          `${API_BASE}/records?status=${encodeURIComponent(this.statusFilter)}${userId ? `&user_id=${encodeURIComponent(userId)}` : ""}`
         );
-        this.records = await parseJson(response);
+        const records = await parseJson(response);
+        if (this.recordsRequest === request) this.records = records;
       } finally {
-        this.loading = false;
+        if (this.recordsRequest === request) this.loading = false;
       }
     },
-    async fetchAllRecords() {
-      const response = await fetch(`${API_BASE}/records`);
+    async fetchAllRecords(userId = null) {
+      const response = await fetch(`${API_BASE}/records${userId ? `?user_id=${encodeURIComponent(userId)}` : ""}`);
       return parseJson(response);
     },
     async searchDiscogs(params) {
@@ -56,8 +61,8 @@ export const useRecordsStore = defineStore("records", {
       const data = await parseJson(response);
       return data.preview;
     },
-    async addDiscogsRelease(payload, status) {
-      const response = await fetch(`${API_BASE}/records`, {
+    async addDiscogsRelease(payload, status, userId = null) {
+      const response = await fetch(`${API_BASE}/records${userId ? `?user_id=${encodeURIComponent(userId)}` : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

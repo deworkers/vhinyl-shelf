@@ -2,12 +2,33 @@
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BarcodeScanner from './components/BarcodeScanner.vue';
+import { useAuthStore } from './stores/auth';
+import { useRecordsStore } from './stores/records';
 
 const route = useRoute();
 const router = useRouter();
 const isSearchOpen = ref(false);
 const quickQuery = ref('');
 const showScanner = ref(false);
+const auth = useAuthStore();
+const records = useRecordsStore();
+const logoutBusy = ref(false);
+const logoutError = ref('');
+
+async function logout() {
+	logoutBusy.value = true;
+	logoutError.value = '';
+	try {
+		await auth.logout();
+		records.$reset();
+		isSearchOpen.value = false;
+		await router.replace('/login');
+	} catch (err) {
+		logoutError.value = err.message;
+	} finally {
+		logoutBusy.value = false;
+	}
+}
 
 watch(
 	() => route.query.q,
@@ -65,7 +86,7 @@ function onBarcodeDetected(barcode) {
 				</router-link>
 
 				<div
-					v-if="route.name !== 'search'"
+					v-if="auth.user && route.name !== 'search'"
 					class="search-wrap"
 					:class="{ 'is-open': isSearchOpen }">
 					<Transition name="search-reveal">
@@ -120,9 +141,15 @@ function onBarcodeDetected(barcode) {
 						</svg>
 					</button>
 				</div>
+				<nav v-if="auth.user" class="account-nav" aria-label="Аккаунт">
+					<router-link v-if="auth.isAdmin" to="/admin">Пользователи</router-link>
+					<router-link to="/account">{{ auth.user.username }}</router-link>
+					<button type="button" :disabled="logoutBusy" @click="logout">Выйти</button>
+				</nav>
 			</div>
 		</header>
 		<main class="content">
+			<p v-if="logoutError" class="account-error" role="alert">{{ logoutError }}</p>
 			<router-view v-slot="{ Component }">
 				<Transition
 					name="page"
@@ -161,6 +188,7 @@ function onBarcodeDetected(barcode) {
 	align-items: center;
 	justify-content: space-between;
 	gap: 0.75rem;
+	flex-wrap: wrap;
 }
 
 /* Бренд */
@@ -244,6 +272,9 @@ function onBarcodeDetected(barcode) {
 .topbar-inner.search-active .search-wrap {
 	flex: 1 1 auto;
 	min-width: 0;
+}
+.topbar-inner.search-active .account-nav {
+	flex-basis: 100%;
 }
 
 .icon-btn {

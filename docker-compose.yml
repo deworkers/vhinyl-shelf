@@ -7,6 +7,11 @@ services:
       - PORT=3001
       - DISCOGS_TOKEN=${DISCOGS_TOKEN}
       - DISCOGS_USER_AGENT=${DISCOGS_USER_AGENT:-VinylShelf/1.0 +http://localhost}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - APP_ORIGIN=${APP_ORIGIN:-}
+      - TRUST_PROXY=1
     volumes:
       - backend-data:/app/data
       - backend-uploads:/app/uploads

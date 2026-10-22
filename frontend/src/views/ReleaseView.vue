@@ -3,10 +3,13 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRecordsStore } from '../stores/records';
 import ReleaseTracklist from '../components/ReleaseTracklist.vue';
+import { useAuthStore } from '../stores/auth';
 
 const route = useRoute();
 const router = useRouter();
 const store = useRecordsStore();
+const auth = useAuthStore();
+const ownerId = ref(null);
 const loading = ref(false);
 const actionLoading = ref(false);
 const error = ref('');
@@ -134,7 +137,7 @@ function findCurrentRecord(records) {
 }
 
 async function refreshCollectionState() {
-	allRecords.value = await store.fetchAllRecords();
+	allRecords.value = await store.fetchAllRecords(ownerId.value);
 	currentRecord.value = findCurrentRecord(allRecords.value);
 }
 
@@ -149,10 +152,10 @@ async function toggleStatus(targetStatus) {
 		} else if (existing) {
 			await store.updateRecord(existing.id, { status: targetStatus });
 		} else {
-			await store.addDiscogsRelease(releaseData.value, targetStatus);
+			await store.addDiscogsRelease(releaseData.value, targetStatus, ownerId.value);
 		}
 		await refreshCollectionState();
-		await store.fetchRecords();
+		await store.fetchRecords(ownerId.value);
 	} catch (err) {
 		error.value = err.message;
 	} finally {
@@ -167,6 +170,7 @@ watch(() => route.params.id, async (_id, _previousId, onCleanup) => {
 	error.value = '';
 	releaseData.value = null;
 	currentRecord.value = null;
+	ownerId.value = null;
 	try {
 		let data;
 		if (isDiscogsPreview.value) {
@@ -174,6 +178,8 @@ watch(() => route.params.id, async (_id, _previousId, onCleanup) => {
 			data = await store.fetchDiscogsRelease(releaseId);
 		} else {
 			const record = await store.fetchRecordById(route.params.id);
+			if (cancelled) return;
+			ownerId.value = auth.isAdmin && record.user_id !== auth.user.id ? record.user_id : null;
 			const payload = record.payload_json
 				? JSON.parse(record.payload_json)
 				: {};
@@ -186,7 +192,7 @@ watch(() => route.params.id, async (_id, _previousId, onCleanup) => {
 				notes: payload.notes || record.notes || '',
 			};
 		}
-		const records = await store.fetchAllRecords();
+		const records = await store.fetchAllRecords(ownerId.value);
 		if (cancelled) return;
 		releaseData.value = data;
 		allRecords.value = records;
@@ -201,6 +207,10 @@ watch(() => route.params.id, async (_id, _previousId, onCleanup) => {
 
 <template>
 	<section class="release-page">
+		<aside v-if="ownerId" class="collection-context">
+			<span>Вы редактируете коллекцию пользователя #{{ ownerId }}</span>
+			<router-link :to="{ path: '/', query: { user_id: ownerId } }">К коллекции</router-link>
+		</aside>
 		<button
 			class="back-btn"
 			@click="router.back()">

@@ -1,10 +1,16 @@
 <script setup>
-import { computed, onMounted, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
 import { storeToRefs } from 'pinia';
 import { useRecordsStore } from '../stores/records';
 import VinylGrid from '../components/VinylGrid.vue';
 
 const store = useRecordsStore();
+const auth = useAuthStore();
+const route = useRoute();
+const error = ref('');
+const ownerId = computed(() => auth.isAdmin && route.query.user_id ? String(route.query.user_id) : null);
 const { records, statusFilter, loading } = storeToRefs(store);
 
 const filters = [
@@ -14,7 +20,7 @@ const filters = [
 
 const heroTitle = computed(() =>
     statusFilter.value === 'my_collection'
-        ? 'Ваша коллекция'
+        ? ownerId.value ? 'Коллекция пользователя' : 'Ваша коллекция'
         : 'Список желаний',
 );
 const totalCount = computed(() => records.value?.length || 0);
@@ -23,17 +29,24 @@ function setStatus(value) {
     statusFilter.value = value;
 }
 
-onMounted(() => {
-    store.fetchRecords();
-});
-
-watch(statusFilter, () => {
-    store.fetchRecords();
-});
+watch([statusFilter, ownerId], async () => {
+    error.value = '';
+    store.records = [];
+    try {
+        await store.fetchRecords(ownerId.value);
+    } catch (err) {
+        error.value = err.message;
+    }
+}, { immediate: true });
 </script>
 
 <template>
     <section class="home">
+        <aside v-if="ownerId" class="collection-context">
+            <span>Коллекция: {{ route.query.username || `пользователь #${ownerId}` }}</span>
+            <router-link to="/">Моя коллекция</router-link>
+        </aside>
+        <p v-if="error" class="account-error" role="alert">{{ error }}</p>
         <header class="hero">
             <h1>{{ heroTitle }}</h1>
 

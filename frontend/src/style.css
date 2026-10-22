@@ -137,6 +137,45 @@ img {
 	border-radius: var(--radius-sm);
 }
 
+.account-nav { display: flex; align-items: center; justify-content: flex-end; gap: .8rem; font-size: .85rem; flex-wrap: wrap; }
+.account-nav a { overflow-wrap: anywhere; }
+.account-nav button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: .35rem 0; }
+.account-nav a:hover, .account-nav button:hover { color: var(--accent); }
+.account-panel { max-width: 440px; margin: 2rem auto; padding: 2rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-elevated); box-shadow: var(--shadow-md); }
+.account-panel h1 { margin: .4rem 0 1rem; font-size: 1.8rem; overflow-wrap: anywhere; }
+.account-panel h2 { font-size: 1.3rem; }
+.account-eyebrow { color: var(--accent); font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; margin: 0; }
+.account-hint, .account-form small { color: var(--text-muted); }
+.account-form { display: grid; gap: 1rem; }
+.account-form label { display: grid; gap: .4rem; }
+.account-form input { min-width: 0; width: 100%; padding: .7rem .8rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg); }
+.account-form small { margin-top: -.6rem; }
+.account-primary, .account-secondary { display: inline-flex; justify-content: center; align-items: center; padding: .65rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; }
+.account-primary { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+.account-primary:hover { background: var(--accent-hover); }
+.account-secondary { background: var(--bg-elevated); }
+.account-secondary:hover { background: var(--bg-subtle); }
+button:disabled { opacity: .55; cursor: wait; }
+.account-error { padding: .8rem; background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-sm); }
+.account-success { padding: .8rem; background: var(--bg-subtle); color: var(--success); border-radius: var(--radius-sm); }
+.admin-page { display: grid; gap: 1rem; }
+.admin-page h1 { margin: .4rem 0; }
+.user-list { display: grid; gap: 1rem; }
+.user-card { padding: 1.25rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.user-card h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.user-card p { color: var(--text-muted); margin: .4rem 0 1rem; }
+.user-actions { display: flex; flex-wrap: wrap; gap: .5rem; font-size: .85rem; }
+.danger-action { color: var(--danger); }
+.danger-button { background: var(--danger); border-color: var(--danger); }
+.confirm-overlay { position: fixed; inset: 0; z-index: 100; background: #1f1a1680; display: grid; place-items: center; padding: 1rem; overflow-y: auto; }
+.confirm-panel { width: 100%; margin: auto; max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.collection-context { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--amber-soft); flex-wrap: wrap; }
+.collection-context a { color: var(--accent); }
+@media (max-width: 640px) {
+  .account-panel { padding: 1.25rem; margin-top: 1rem; }
+  .account-nav { gap: .5rem; font-size: .75rem; }
+}
+
 /* Скроллбар (опционально, в стилистике темы) */
 ::-webkit-scrollbar {
 	width: 10px;
